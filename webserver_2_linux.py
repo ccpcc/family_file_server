@@ -6,27 +6,26 @@ import json
 urls=("/ok","Index",
 "/upload/(.*)","Upload",
 "/download/(.*)","Down",
-"/newfile/(.*)","New",
+"/new/(.*)","New",
 "/","Login",
 "/app/","App",
 "/icons/(.*)","Ico")
 #render=web.template.render("htmls")
+def find_rootpath():
+    
+    path_list = os.listdir('/media/pi')
+    for path in path_list:
+        real_path='/media/pi/'+path
+        if os.path.isdir(real_path):
+            file_list=os.listdir(real_path)
+            if ("main_dir.txt" in file_list) and ('static' in file_list):
+                return real_path+"/"+"static"
+    
 
 app=web.application(urls,globals())
 root=find_rootpath()
+print(root)
     
-def find_rootpath():
-    try:
-        path_list = os.listdir('/media/pi')
-        for path in path_list:
-            real_path='/media/pi/'+path
-            if os.path.isdir(real_path):
-                file_list=os.listdir(real_path)
-                if ("main_dir.txt" in file_list) and (root in file_list):
-                    return real_path+"/"+"static"
-    except:
-        return None
-
 def jiami(a):
     re=[]
     l1=["000","001","010","011","100","101","110","111"]
@@ -149,13 +148,13 @@ def url_to_path(url):#输入 download/ 后的内容
         else:
             path=path+word+"/"
     print(path.strip("/"))
-    return path.strip("/")#返还电脑路径
+    return '/'+path.strip("/")#返还电脑路径
 
 def path_to_url(path):#输入电脑路径
     root_path=root+'/'
     url="http://192.168.1.100:8080/download/"
-    path=path.strip("/")
-    path=path.replace(root_path,"",1)
+    path='/'+path.strip("/")
+    path=path.replace(root_path,"")
     path_list=path.split("/")
     for word in path_list:
         if have_chinese(word):
@@ -174,7 +173,7 @@ class Index:
         if name in c:
             if key==c[name]:
                 web.setcookie("check",encp(name+" "+key))
-                fo=open("htmls\\Index.html","rb").read()
+                fo=open("htmls/Index.html","rb").read()
                 return fo
             else:
                 return "密码错误"
@@ -351,7 +350,7 @@ class New:
 class Login:
     def GET(self):
         web.header('Content-Type','text/html;charset=UTF-8')
-        fo=open("htmls\\log.html","rb").read()
+        fo=open("htmls/log.html","rb").read()
         return fo
         
 class App:
