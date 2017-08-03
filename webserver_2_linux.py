@@ -2,6 +2,7 @@ import web
 import random
 import os
 import json
+import my_logging
 
 urls=("/ok","Index",
 "/upload/(.*)","Upload",
@@ -11,6 +12,16 @@ urls=("/ok","Index",
 "/app/","App",
 "/icons/(.*)","Ico")
 #render=web.template.render("htmls")
+
+def find_asspath():
+    path_list = os.listdir('/media/pi')
+    for path in path_list:
+        real_path='/media/pi/'+path
+        if os.path.isdir(real_path):
+            file_list=os.listdir(real_path)
+            if ("ass_dir.txt" in file_list) and ('dairy' in file_list):
+                return real_path+"/"+"dairy"
+
 def find_rootpath():
     
     path_list = os.listdir('/media/pi')
@@ -21,10 +32,9 @@ def find_rootpath():
             if ("main_dir.txt" in file_list) and ('static' in file_list):
                 return real_path+"/"+"static"
     
-
 app=web.application(urls,globals())
 root=find_rootpath()
-print(root)
+ass=find_asspath()
     
 def jiami(a):
     re=[]
@@ -73,7 +83,6 @@ def decp(text):
         result=result+bytes((int(letter,2),))
     return result.decode("utf-8")
     
-
 def check_rights(cookie,path):#计算机路径
     try:
         if path==root:
@@ -147,7 +156,6 @@ def url_to_path(url):#输入 download/ 后的内容
             path=path+bytes_to_ch(word)+"/"
         else:
             path=path+word+"/"
-    print(path.strip("/"))
     return '/'+path.strip("/")#返还电脑路径
 
 def path_to_url(path):#输入电脑路径
@@ -165,217 +173,329 @@ def path_to_url(path):#输入电脑路径
     
 class Index:
     def POST(self):
-        i=web.input()
-        name=i.get("name")
-        key=i.get("key")
-        c=load_conf()
-        web.header('Content-Type','text/html;charset=UTF-8')
-        if name in c:
-            if key==c[name]:
-                web.setcookie("check",encp(name+" "+key))
-                fo=open("htmls/Index.html","rb").read()
-                return fo
+        log={}
+        log["home"] = "192.168.1.100:8080/ok"
+        log["user_ip"] = web.ctx.ip
+        log["method"] = web.ctx.method
+        try:
+            i=web.input()
+            name=i.get("name")
+            key=i.get("key")
+            c=load_conf()
+            web.header('Content-Type','text/html;charset=UTF-8')
+            if name in c:
+                if key==c[name]:
+                    web.setcookie("check",encp(name+" "+key))
+                    fo=open("htmls/Index.html","rb").read()
+                    log["status"] = "200"
+                    my_logging.write_log(log,ass)
+                    return fo
+                else:
+                    log["status"] = "403"
+                    my_logging.write_log(log,ass)
+                    return "密码错误"
             else:
-                return "密码错误"
-        else:
-            return "账号不存在"    
-                    
+                log["status"] = "403"
+                my_logging.write_log(log,ass)
+                return "账号不存在"    
+        except:
+            log["status"] = "500"
+            my_logging.write_log(log,ass)
+            return "500 erro"
+            
 class Upload:
     def POST(self,name):
-        rp=url_to_path(name)
-        i=web.input(file={})
-        file_name=i.file.filename
-        file=i.file.file.read()
-        fo=open(rp+"/"+file_name,"wb")
-        fo.write(file)
-        fo.close()
-        fo=open("htmls/success.html","rb")
-        htm=fo.read()
-        fo.close()
-        web.header('Content-Type','text/html;charset=UTF-8')
-        return htm
-        
-    def GET(self,name):
-        cookie=web.cookies().get("check")
-        if check_cookie(cookie):#通过身份验证
-            htm="""
-            <Doctype html>
-            <html>
-            <head>
-             <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-            <title>文件共享</title>
-            </head>
-            <body>
-            <p>文件上传</p>
-            <form action="/upload/%s" method="POST" enctype="multipart/form-data">
-                <input type="file" name="file">
-                <input type="submit" value="POST">
-            </form><br>
-            </body>
-            </html>
-            """%name
-            web.header('Content-Type','text/html;charset=UTF-8')
-            return htm.encode("utf-8")
-        else:
-            web.header('Content-Type','text/html;charset=UTF-8')
-            fo=open("htmls/fail.html","rb")
+        log={}
+        log["home"] = "192.168.1.100:8080/upload/"+name
+        log["user_ip"] = web.ctx.ip
+        log["method"] = web.ctx.method
+        try:
+            rp=url_to_path(name)
+            i=web.input(file={})
+            file_name=i.file.filename
+            file=i.file.file.read()
+            fo=open(rp+"/"+file_name,"wb")
+            fo.write(file)
+            fo.close()
+            fo=open("htmls/success.html","rb")
             htm=fo.read()
             fo.close()
+            web.header('Content-Type','text/html;charset=UTF-8')
+            log["status"] = "200"
+            my_logging.write_log(log,ass)
             return htm
-        
+        except:
+            log["status"] = "500"
+            my_logging.write_log(log,ass)
+            return "500 erro"
+            
+    def GET(self,name):
+        log={}
+        log["home"] = "192.168.1.100:8080/upload/"+name
+        log["user_ip"] = web.ctx.ip
+        log["method"] = web.ctx.method
+        try:
+            cookie=web.cookies().get("check")
+            if check_cookie(cookie):#通过身份验证
+                htm="""
+                <Doctype html>
+                <html>
+                <head>
+                 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+                <title>文件共享</title>
+                </head>
+                <body>
+                <p>文件上传</p>
+                <form action="/upload/%s" method="POST" enctype="multipart/form-data">
+                    <input type="file" name="file">
+                    <input type="submit" value="POST">
+                </form><br>
+                </body>
+                </html>
+                """%name
+                web.header('Content-Type','text/html;charset=UTF-8')
+                log["status"] = "200"
+                my_logging.write_log(log,ass)
+                return htm.encode("utf-8")
+            else:
+                web.header('Content-Type','text/html;charset=UTF-8')
+                fo=open("htmls/fail.html","rb")
+                htm=fo.read()
+                fo.close()
+                log["status"] = "403"
+                my_logging.write_log(log,ass)
+                return htm
+        except:
+            log["status"] = "500"
+            my_logging.write_log(log,ass)
+            return "500 erro"
 class Down:
     def GET(self,name):
-        cookie=web.cookies().get("check")
-        checkrp=url_to_path(name)#电脑路径
-        rp=checkrp+"/"
-        if check_cookie(cookie) and check_rights(cookie,checkrp):#通过身份验证
-            htm="""
-            <!Doctype html>
-            <html>
-            <head>
-            <title>文件</title>
-            <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-            </head>
-            <body>
-            <table width="98%" border="0" align="center" style="word-break:break-all; word-wrap:break-all;">
-                <tr>
-                <td colspan="3" ><h1>文件:</h1></td>
-                </tr>
-                [file]
-                <tr>
-                <td colspan="3" ><h1>文件夹:</h1></td>
-                </tr>
-                [path]
-                <tr>
-                <td colspan="3" ><h1>操作</h1></td>
-                </tr>
-                [link]
-            </table></body></html>
-            """
+        log={}
+        log["home"] = "192.168.1.100:8080/downlaod/"+name
+        log["user_ip"] = web.ctx.ip
+        log["method"] = web.ctx.method
+        try:
+            cookie=web.cookies().get("check")
+            checkrp=url_to_path(name)#电脑路径
+            rp=checkrp+"/"
+            if check_cookie(cookie) and check_rights(cookie,checkrp):#通过身份验证
+                htm="""
+                <!Doctype html>
+                <html>
+                <head>
+                <title>文件</title>
+                <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+                </head>
+                <body>
+                <table width="98%" border="0" align="center" style="word-break:break-all; word-wrap:break-all;">
+                    <tr>
+                    <td colspan="3" ><h1>文件:</h1></td>
+                    </tr>
+                    [file]
+                    <tr>
+                    <td colspan="3" ><h1>文件夹:</h1></td>
+                    </tr>
+                    [path]
+                    <tr>
+                    <td colspan="3" ><h1>操作</h1></td>
+                    </tr>
+                    [link]
+                </table></body></html>
+                """
 
-            if os.path.isfile(checkrp):#是文件
-                #添加header
-                if "." in checkrp:
-                    extra_name=checkrp.split(".")[-1]
-                    if extra_name=="jpe" or extra_name=="jpeg" or extra_name=="jpg":
-                        web.header('Content-Type',"image/jpeg")
-                        #http://tool.oschina.net/commons
-                    elif extra_name=="gif":
-                        web.header('Content-Type',"image/gif")
-                    elif extra_name=="png":
-                        web.header('Content-Type',"image/png")
-                    elif extra_name=="tif" or extra_name=="tiff":
-                        web.header('Content-Type',"image/tif")
-                    else:#其他扩展名
-                        web.header('Content-Type',"application/octet-stream")
-                else:#无扩展名
-                    web.header('Content-Type',"	application/octet-stream")
-                return open(checkrp,"rb").read()
-            else:#是路径
-                file_list = os.listdir(checkrp) #列出文件夹下所有的目录与文件
-                for i in range(0,len(file_list)):#遍历该路径
-                    path = rp+file_list[i]
-                    real_url=path_to_url(path)#path电脑子路径 file_list文件名
-                    if os.path.isfile(path):#是文件
-                        file_size=os.path.getsize(path)
-                        if "." in path:
-                            checkp=path.split(".")[-1]
-                            if checkp=="jpe" or checkp=="jpeg" or checkp=="jpg" or checkp=="gif" or checkp=="png" or checkp=="tif" or checkp=="tiff" :
-                                htm=htm.replace("[file]",'<tr style="background-color:#FFFFCC"><td style="height:200px;width:260px"><a href="%s"><img src="%s" alt="%s" width="250" height="150"/></a></td>[file]'%(real_url,real_url,file_list[i]))
-                                htm=htm.replace("[file]",'<td style="text-align:center;"><h2>%s</h2></td><td width="100px"><a href="%s"><img src="http://192.168.1.100:8080/icons/download.jpg" alt="downlaod" width="100" height="100"></a></td></tr>[file]'%(file_list[i],real_url))
-                            else:#非图片
+                if os.path.isfile(checkrp):#是文件
+                    #添加header
+                    if "." in checkrp:
+                        extra_name=checkrp.split(".")[-1]
+                        if extra_name=="jpe" or extra_name=="jpeg" or extra_name=="jpg":
+                            web.header('Content-Type',"image/jpeg")
+                            #http://tool.oschina.net/commons
+                        elif extra_name=="gif":
+                            web.header('Content-Type',"image/gif")
+                        elif extra_name=="png":
+                            web.header('Content-Type',"image/png")
+                        elif extra_name=="tif" or extra_name=="tiff":
+                            web.header('Content-Type',"image/tif")
+                        else:#其他扩展名
+                            web.header('Content-Type',"application/octet-stream")
+                    else:#无扩展名
+                        web.header('Content-Type',"	application/octet-stream")
+                    log["status"] = "200"
+                    my_logging.write_log(log,ass)
+                    return open(checkrp,"rb").read()
+                else:#是路径
+                    file_list = os.listdir(checkrp) #列出文件夹下所有的目录与文件
+                    for i in range(0,len(file_list)):#遍历该路径
+                        path = rp+file_list[i]
+                        real_url=path_to_url(path)#path电脑子路径 file_list文件名
+                        if os.path.isfile(path):#是文件
+                            file_size=os.path.getsize(path)
+                            if "." in path:
+                                checkp=path.split(".")[-1]
+                                if checkp=="jpe" or checkp=="jpeg" or checkp=="jpg" or checkp=="gif" or checkp=="png" or checkp=="tif" or checkp=="tiff" :
+                                    htm=htm.replace("[file]",'<tr style="background-color:#FFFFCC"><td style="height:200px;width:260px"><a href="%s"><img src="%s" alt="%s" width="250" height="150"/></a></td>[file]'%(real_url,real_url,file_list[i]))
+                                    htm=htm.replace("[file]",'<td style="text-align:center;"><h2>%s</h2></td><td width="100px"><a href="%s"><img src="http://192.168.1.100:8080/icons/download.jpg" alt="downlaod" width="100" height="100"></a></td></tr>[file]'%(file_list[i],real_url))
+                                else:#非图片
+                                    htm=htm.replace("[file]",'<tr style="background-color:#FFFFCC"><td style="height:200px;width:260px"><img src="http://192.168.1.100:8080/icons/erro.jpg" alt="%s" width="250" height="150"/></td>[file]'%(file_list[i]))
+                                    htm=htm.replace("[file]",'<td style="text-align:center;"><h2>%s</h2></td><td width="100px"><a href="%s"><img src="http://192.168.1.100:8080/icons/download.jpg" alt="downlaod" width="100" height="100"></a></td></tr>[file]'%(file_list[i],real_url))
+                            else:#无扩展名
                                 htm=htm.replace("[file]",'<tr style="background-color:#FFFFCC"><td style="height:200px;width:260px"><img src="http://192.168.1.100:8080/icons/erro.jpg" alt="%s" width="250" height="150"/></td>[file]'%(file_list[i]))
                                 htm=htm.replace("[file]",'<td style="text-align:center;"><h2>%s</h2></td><td width="100px"><a href="%s"><img src="http://192.168.1.100:8080/icons/download.jpg" alt="downlaod" width="100" height="100"></a></td></tr>[file]'%(file_list[i],real_url))
-                        else:#无扩展名
-                            htm=htm.replace("[file]",'<tr style="background-color:#FFFFCC"><td style="height:200px;width:260px"><img src="http://192.168.1.100:8080/icons/erro.jpg" alt="%s" width="250" height="150"/></td>[file]'%(file_list[i]))
-                            htm=htm.replace("[file]",'<td style="text-align:center;"><h2>%s</h2></td><td width="100px"><a href="%s"><img src="http://192.168.1.100:8080/icons/download.jpg" alt="downlaod" width="100" height="100"></a></td></tr>[file]'%(file_list[i],real_url))
-                    else:#是文件夹
-                        htm=htm.replace("[path]",'<tr style="background-color:#FFFFCC"><td style="height:200px;width:260px"><img src="http://192.168.1.100:8080/icons/dir.jpg" alt="%s" width="250" height="150"/></td>[path]'%(file_list[i]))
-                        htm=htm.replace("[path]",'<td style="text-align:center;"><h2>%s</h2></td><td width="100px"><a href="%s"><img src="http://192.168.1.100:8080/icons/open.jpg" alt="open" width="100" height="100"></a></td></tr>[path]'%(file_list[i],real_url))
-                htm=htm.replace("[link]",'<tr><td><img src="http://192.168.1.100:8080/icons/upload.jpg" alt="upload" width="200" height="150"/></td><td colspan="2"><a href="http://192.168.1.100:8080/upload/%s"><h2>在此上传</h2></a></td></tr>[link]'%name)
-                htm=htm.replace("[link]",'<tr><td><img src="http://192.168.1.100:8080/icons/new.jpg" alt="new" width="200" height="150"/></td><td colspan="2"><a href="http://192.168.1.100:8080/new/%s"><h2>新建文件夹</h2></a></td></tr>'%name)
-                htm=htm.replace("[file]","")
-                htm=(htm.replace("[path]","")).encode("utf-8")
+                        else:#是文件夹
+                            htm=htm.replace("[path]",'<tr style="background-color:#FFFFCC"><td style="height:200px;width:260px"><img src="http://192.168.1.100:8080/icons/dir.jpg" alt="%s" width="250" height="150"/></td>[path]'%(file_list[i]))
+                            htm=htm.replace("[path]",'<td style="text-align:center;"><h2>%s</h2></td><td width="100px"><a href="%s"><img src="http://192.168.1.100:8080/icons/open.jpg" alt="open" width="100" height="100"></a></td></tr>[path]'%(file_list[i],real_url))
+                    htm=htm.replace("[link]",'<tr><td><img src="http://192.168.1.100:8080/icons/upload.jpg" alt="upload" width="200" height="150"/></td><td colspan="2"><a href="http://192.168.1.100:8080/upload/%s"><h2>在此上传</h2></a></td></tr>[link]'%name)
+                    htm=htm.replace("[link]",'<tr><td><img src="http://192.168.1.100:8080/icons/new.jpg" alt="new" width="200" height="150"/></td><td colspan="2"><a href="http://192.168.1.100:8080/new/%s"><h2>新建文件夹</h2></a></td></tr>'%name)
+                    htm=htm.replace("[file]","")
+                    htm=(htm.replace("[path]","")).encode("utf-8")
+                    web.header('Content-Type','text/html;charset=UTF-8')
+                    log["status"] = "200"
+                    my_logging.write_log(log,ass)
+                    return htm
+        
+            else:#身份不对
                 web.header('Content-Type','text/html;charset=UTF-8')
+                fo=open("htmls/fail.html","rb")
+                htm=fo.read()
+                fo.close()
+                log["status"] = "403"
+                my_logging.write_log(log,ass)
                 return htm
-    
-        else:#身份不对
-            web.header('Content-Type','text/html;charset=UTF-8')
-            fo=open("htmls/fail.html","rb")
-            htm=fo.read()
-            fo.close()
-            return htm
-
+        except:
+            log["status"] = "500"
+            my_logging.write_log(log,ass)
+            return "500 erro"
 class New:
     def GET(self,name):
-        cookie=web.cookies().get("check")
-        if check_cookie(cookie):#通过身份验证
-            htm="""
-            <Doctype html>
-            <html>
-            <head>
-             <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-            <title>文件共享</title>
-            </head>
-            <body>
-            <p>新建文件夹</p>
-            <form action="/newfile/%s" method="POST" enctype="multipart/form-data">
-            文件夹名称：<input type="text" name="name"><br>
-            <input type="submit" value="新建"><br>
-            </form>
-            </body>
-            </html>
-            """%name
-            web.header('Content-Type','text/html;charset=UTF-8')
-            return htm.encode("utf-8")
-        else:
-            web.header('Content-Type','text/html;charset=UTF-8')
-            fo=open("htmls/fail.html","rb")
-            htm=fo.read()
-            fo.close()
-            return htm
+        log={}
+        log["home"] = "192.168.1.100:8080/new/"+name
+        log["user_ip"] = web.ctx.ip
+        log["method"] = web.ctx.method
+        try:
+            cookie=web.cookies().get("check")
+            if check_cookie(cookie):#通过身份验证
+                htm="""
+                <Doctype html>
+                <html>
+                <head>
+                 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+                <title>文件共享</title>
+                </head>
+                <body>
+                <p>新建文件夹</p>
+                <form action="/newfile/%s" method="POST" enctype="multipart/form-data">
+                文件夹名称：<input type="text" name="name"><br>
+                <input type="submit" value="新建"><br>
+                </form>
+                </body>
+                </html>
+                """%name
+                web.header('Content-Type','text/html;charset=UTF-8')
+                log["status"] = "200"
+                my_logging.write_log(log,ass)
+                return htm.encode("utf-8")
+            else:
+                web.header('Content-Type','text/html;charset=UTF-8')
+                fo=open("htmls/fail.html","rb")
+                htm=fo.read()
+                fo.close()
+                log["status"] = "403"
+                my_logging.write_log(log,ass)
+                return htm
+        except:   
+            log["status"] = "500"
+            my_logging.write_log(log,ass)
+            return "500 erro"
             
     def POST(self,name):
-        web.header('Content-Type','text/html;charset=UTF-8')
-        path=url_to_path(name)
-        i=web.input()
-        file_name=i.get("name")
-        path=path+"/"+file_name
-        if os.path.exists(path):
-            return "创建失败，路径已存在！"
-        else:
-            os.mkdir(path)
-            return "创建成功！"
+        log={}
+        log["home"] = "192.168.1.100:8080/new/"+name
+        log["user_ip"] = web.ctx.ip
+        log["method"] = web.ctx.method
+        try:
+            web.header('Content-Type','text/html;charset=UTF-8')
+            path=url_to_path(name)
+            i=web.input()
+            file_name=i.get("name")
+            path=path+"/"+file_name
+            if os.path.exists(path):
+                log["status"] = "403"
+                my_logging.write_log(log,ass)
+                return "创建失败，路径已存在！"
+            else:
+                os.mkdir(path)
+                log["status"] = "200"
+                my_logging.write_log(log,ass)
+                return "创建成功！"
+        except:
+            log["status"] = "500"
+            my_logging.write_log(log,ass)
+            return "500 erro"
             
 class Login:
     def GET(self):
-        web.header('Content-Type','text/html;charset=UTF-8')
-        fo=open("htmls/log.html","rb").read()
-        return fo
-        
+        log={}
+        log["home"] = "192.168.1.100:8080/"
+        log["user_ip"] = web.ctx.ip
+        log["method"] = web.ctx.method
+        try:
+            web.header('Content-Type','text/html;charset=UTF-8')
+            fo=open("htmls/log.html","rb").read()
+            log["status"] = "200"
+            my_logging.write_log(log,ass)
+            return fo
+        except:
+            log["status"] = "500"
+            my_logging.write_log(log,ass)
+            return "500 erro"
+            
 class App:
     def GET(self):
-        cookie=web.cookies().get("check")
-        if check_cookie(cookie):#通过身份验证
-            web.header('Content-Type','text/html;charset=UTF-8')
-            fo=open("htmls/app.html","rb")
-            htm=fo.read()
-            fo.close()
-            return htm
-        else:#身份不对
-            web.header('Content-Type','text/html;charset=UTF-8')
-            fo=open("htmls/fail.html","rb")
-            htm=fo.read()
-            fo.close()
-            return htm
- 
+        log={}
+        log["home"] = "192.168.1.100:8080/app/"
+        log["user_ip"] = web.ctx.ip
+        log["method"] = web.ctx.method
+        try:
+            cookie=web.cookies().get("check")
+            if check_cookie(cookie):#通过身份验证
+                web.header('Content-Type','text/html;charset=UTF-8')
+                fo=open("htmls/app.html","rb")
+                htm=fo.read()
+                fo.close()
+                log["status"] = "200"
+                my_logging.write_log(log,ass)
+                return htm
+            else:#身份不对
+                web.header('Content-Type','text/html;charset=UTF-8')
+                fo=open("htmls/fail.html","rb")
+                htm=fo.read()
+                fo.close()
+                log["status"] = "403"
+                my_logging.write_log(log,ass)
+                return htm
+        except:
+            log["status"] = "500"
+            my_logging.write_log(log,ass)
+            return "500 erro"
 class Ico:
     def GET(self,name):
-        web.header('Content-Type',"	image/jpeg")
-        fo=open('icons/'+name,"rb")
-        c=fo.read()
-        fo.close()
-        return c
+        log={}
+        log["home"] = "192.168.1.100:8080/icons/"+name
+        log["user_ip"] = web.ctx.ip
+        log["method"] = web.ctx.method
+        try:
+            web.header('Content-Type',"	image/jpeg")
+            fo=open('icons/'+name,"rb")
+            c=fo.read()
+            fo.close()
+            log["status"] = "200"
+            my_logging.write_log(log,ass)
+            return c
+        except:
+            log["status"] = "200"
+            my_logging.write_log(log,ass)
+            return "404 erro"
         
 if __name__ == "__main__":
     app.run()
